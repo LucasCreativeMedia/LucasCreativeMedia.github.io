@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sq Ft to Acres Calculator</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f4f1ea;
+    display: flex;
+    justify-content: center;
+    padding-top: 60px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 340px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-size: 14px;
+    color: #555;
+    margin-top: 16px;
+    margin-bottom: 4px;
+  }
+  input {
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
+  .result {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+  }
+  .result p {
+    display: flex;
+    justify-content: space-between;
+    font-size: 16px;
+    margin: 6px 0;
+  }
+  .result span:last-child {
+    font-weight: bold;
+  }
+  .error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+  button {
+    width: 100%;
+    margin-top: 18px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #e6e6e6;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Sq Ft &harr; Acres Calculator</h1>
+  <p class="subtitle">1 acre = 43,560 square feet — enter either field</p>
+
+  <label for="sqft">Square footage</label>
+  <input type="number" id="sqft" placeholder="e.g. 10000" min="0">
+
+  <label for="acres">Acres</label>
+  <input type="number" id="acres" placeholder="e.g. 0.5" min="0" step="any">
+
+  <p class="error" id="errorMsg"></p>
+
+  <div class="result">
+    <p><span>% of an acre:</span> <span id="percentResult">0%</span></p>
+  </div>
+
+  <button id="resetBtn">Reset</button>
+</div>
+
+<script>
+  const SQFT_PER_ACRE = 43560;
+
+  const sqftInput = document.getElementById('sqft');
+  const acresInput = document.getElementById('acres');
+  const errorMsg = document.getElementById('errorMsg');
+  const percentResult = document.getElementById('percentResult');
+
+  function showError(message) {
+    errorMsg.textContent = message;
+  }
+
+  function updatePercent(sqft) {
+    const percentOfAcre = (sqft / SQFT_PER_ACRE) * 100;
+    percentResult.textContent = percentOfAcre.toFixed(1) + '%';
+  }
+
+  // Runs when the person types in the SQUARE FOOTAGE field
+  function fromSqft() {
+    const rawValue = sqftInput.value;
+
+    if (rawValue === '') {
+      acresInput.value = '';
+      percentResult.textContent = '0%';
+      showError('');
+      return;
+    }
+
+    const sqft = parseFloat(rawValue);
+
+    if (isNaN(sqft) || sqft < 0) {
+      showError('Please enter a positive number.');
+      return;
+    }
+
+    showError('');
+
+    // Setting .value directly (not through user typing) does NOT fire
+    // another 'input' event — that's what stops this from looping forever
+    // between the two fields.
+    acresInput.value = (sqft / SQFT_PER_ACRE).toFixed(4);
+    updatePercent(sqft);
+  }
+
+  // Runs when the person types in the ACRES field
+  function fromAcres() {
+    const rawValue = acresInput.value;
+
+    if (rawValue === '') {
+      sqftInput.value = '';
+      percentResult.textContent = '0%';
+      showError('');
+      return;
+    }
+
+    const acres = parseFloat(rawValue);
+
+    if (isNaN(acres) || acres < 0) {
+      showError('Please enter a positive number.');
+      return;
+    }
+
+    showError('');
+
+    const sqft = acres * SQFT_PER_ACRE;
+    sqftInput.value = sqft.toFixed(2);
+    updatePercent(sqft);
+  }
+
+  sqftInput.addEventListener('input', fromSqft);
+  acresInput.addEventListener('input', fromAcres);
+
+  const resetBtn = document.getElementById('resetBtn');
+
+  function resetCalculator() {
+    sqftInput.value = '';
+    acresInput.value = '';
+    percentResult.textContent = '0%';
+    showError('');
+  }
+
+  resetBtn.addEventListener('click', resetCalculator);
+</script>
+
+</body>
+</html>

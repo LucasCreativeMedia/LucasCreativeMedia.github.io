@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Feet to Meters Calculator</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f4f1ea;
+    display: flex;
+    justify-content: center;
+    padding-top: 60px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 340px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-size: 14px;
+    color: #555;
+    margin-top: 16px;
+    margin-bottom: 4px;
+  }
+  input {
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
+  .error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+  button {
+    width: 100%;
+    margin-top: 18px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #e6e6e6;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Feet &harr; Meters Calculator</h1>
+  <p class="subtitle">1 foot = 0.3048 meters — enter either field</p>
+
+  <label for="feet">Feet</label>
+  <input type="number" id="feet" placeholder="e.g. 10" min="0" step="any">
+
+  <label for="meters">Meters</label>
+  <input type="number" id="meters" placeholder="e.g. 3" min="0" step="any">
+
+  <p class="error" id="errorMsg"></p>
+
+  <button id="resetBtn">Reset</button>
+</div>
+
+<script>
+  const METERS_PER_FOOT = 0.3048;
+
+  const feetInput = document.getElementById('feet');
+  const metersInput = document.getElementById('meters');
+  const errorMsg = document.getElementById('errorMsg');
+
+  function showError(message) {
+    errorMsg.textContent = message;
+  }
+
+  // Runs when the person types in the FEET field
+  function fromFeet() {
+    const rawValue = feetInput.value;
+
+    if (rawValue === '') {
+      metersInput.value = '';
+      showError('');
+      return;
+    }
+
+    const feet = parseFloat(rawValue);
+
+    if (isNaN(feet) || feet < 0) {
+      showError('Please enter a positive number.');
+      return;
+    }
+
+    showError('');
+    metersInput.value = (feet * METERS_PER_FOOT).toFixed(4);
+  }
+
+  // Runs when the person types in the METERS field
+  function fromMeters() {
+    const rawValue = metersInput.value;
+
+    if (rawValue === '') {
+      feetInput.value = '';
+      showError('');
+      return;
+    }
+
+    const meters = parseFloat(rawValue);
+
+    if (isNaN(meters) || meters < 0) {
+      showError('Please enter a positive number.');
+      return;
+    }
+
+    showError('');
+    feetInput.value = (meters / METERS_PER_FOOT).toFixed(4);
+  }
+
+  feetInput.addEventListener('input', fromFeet);
+  metersInput.addEventListener('input', fromMeters);
+
+  const resetBtn = document.getElementById('resetBtn');
+
+  function resetCalculator() {
+    feetInput.value = '';
+    metersInput.value = '';
+    showError('');
+  }
+
+  resetBtn.addEventListener('click', resetCalculator);
+</script>
+
+</body>
+</html>
