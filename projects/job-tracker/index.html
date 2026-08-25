@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Job Tracker</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f4f1ea;
+    display: flex;
+    justify-content: center;
+    padding: 60px 20px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 400px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-size: 14px;
+    color: #555;
+    margin-top: 16px;
+    margin-bottom: 4px;
+  }
+  input, textarea {
+    width: 100%;
+    padding: 8px;
+    font-size: 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+  .time-row {
+    display: flex;
+    gap: 12px;
+  }
+  .time-row > div {
+    flex: 1;
+  }
+  .total-time-display {
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: #f0f0f0;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #333;
+  }
+  .total-time-display b {
+    color: #111;
+  }
+  .error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+  .status {
+    font-size: 13px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+  .status.success { color: #1e8449; }
+  .status.sending { color: #888; }
+  button {
+    width: 100%;
+    margin-top: 20px;
+    padding: 11px;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    background: #2c7a4b;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { background: #256a41; }
+  button:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Job Tracker</h1>
+  <p class="subtitle">Entries are saved directly to your Google Sheet</p>
+
+  <form id="jobForm">
+    <label for="jobNumber">Job number</label>
+    <input type="text" id="jobNumber" required>
+
+    <label for="date">Date</label>
+    <input type="date" id="date" required>
+
+    <div class="time-row">
+      <div>
+        <label for="startTime">Start time</label>
+        <input type="time" id="startTime" required>
+      </div>
+      <div>
+        <label for="endTime">End time</label>
+        <input type="time" id="endTime" required>
+      </div>
+    </div>
+
+    <div class="total-time-display">
+      Total time: <b id="totalTimeDisplay">—</b>
+    </div>
+
+    <p class="error" id="timeError"></p>
+
+    <label for="comments">Comments</label>
+    <textarea id="comments" placeholder="Optional notes about this entry"></textarea>
+
+    <label for="totalPayment">Total payment ($)</label>
+    <input type="number" id="totalPayment" step="0.01" min="0" placeholder="0.00">
+
+    <button type="submit" id="submitBtn">Add entry</button>
+    <p class="status" id="statusMsg"></p>
+  </form>
+</div>
+
+<script>
+  // Paste your Apps Script Web app URL here
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgJmOVGheipR0V0FJLsF9t5HgZ6LyB3RvXDElpQuFf8bXCqYYzgks9vW9RvtvfVL2i0A/exec";
+
+  const form = document.getElementById('jobForm');
+  const startTimeInput = document.getElementById('startTime');
+  const endTimeInput = document.getElementById('endTime');
+  const totalTimeDisplay = document.getElementById('totalTimeDisplay');
+  const timeError = document.getElementById('timeError');
+  const statusMsg = document.getElementById('statusMsg');
+  const submitBtn = document.getElementById('submitBtn');
+
+  // Converts "HH:MM" start/end times into decimal hours (e.g. 2.5 = 2h 30m)
+  function calculateTotalHours() {
+    const start = startTimeInput.value;
+    const end = endTimeInput.value;
+
+    if (!start || !end) {
+      totalTimeDisplay.textContent = '—';
+      timeError.textContent = '';
+      return null;
+    }
+
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    if (endMinutes <= startMinutes) {
+      timeError.textContent = 'End time must be after start time.';
+      totalTimeDisplay.textContent = '—';
+      return null;
+    }
+
+    timeError.textContent = '';
+    const totalHours = (endMinutes - startMinutes) / 60;
+    totalTimeDisplay.textContent = totalHours.toFixed(2) + ' hours';
+    return totalHours;
+  }
+
+  startTimeInput.addEventListener('input', calculateTotalHours);
+  endTimeInput.addEventListener('input', calculateTotalHours);
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const totalHours = calculateTotalHours();
+    if (totalHours === null) {
+      return; // don't submit if times are invalid or incomplete
+    }
+
+    const payload = {
+      jobNumber: document.getElementById('jobNumber').value,
+      date: document.getElementById('date').value,
+      startTime: startTimeInput.value,
+      endTime: endTimeInput.value,
+      totalTime: totalHours,
+      comments: document.getElementById('comments').value,
+      totalPayment: document.getElementById('totalPayment').value
+    };
+
+    submitBtn.disabled = true;
+    statusMsg.textContent = 'Saving to sheet…';
+    statusMsg.className = 'status sending';
+
+    // Apps Script web apps don't send back CORS headers, so the browser
+    // won't let us read the response. mode: "no-cors" avoids the browser
+    // blocking the request itself — we just can't inspect what came back,
+    // so we optimistically assume success if no network error was thrown.
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+      .then(function () {
+        statusMsg.textContent = 'Entry saved!';
+        statusMsg.className = 'status success';
+        form.reset();
+        totalTimeDisplay.textContent = '—';
+        submitBtn.disabled = false;
+      })
+      .catch(function (error) {
+        statusMsg.textContent = 'Something went wrong. Check your internet connection and try again.';
+        statusMsg.className = 'status error';
+        submitBtn.disabled = false;
+      });
+  });
+</script>
+
+</body>
+</html>
