@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Side Job Log | Tim Lucas</title>
+<meta name="description" content="A side-job time tracker with a start/stop timer, running hour totals per job, and Excel export.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: field logbook — a sticky tab strip, one working column (timer → day log), wide tables scroll inside their own frames */
+:root{
+  --bg:#F4F6F4; --surface:#FFFFFF; --sunk:#EBEFEC; --ink:#1B2423; --muted:#5B6866; --line:#D6DDD9;
+  --accent:#1E6B59; --accent-ink:#FFFFFF; --accent-soft:#DDEDE7;
+  --run:#C8731E; --run-soft:#F8E7D4; --danger:#B3261E; --danger-soft:#F6DEDB;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111615; --surface:#19201F; --sunk:#141A19; --ink:#E4EBE8; --muted:#93A29E; --line:#2A3432;
+  --accent:#58BFA2; --accent-ink:#0D1A16; --accent-soft:#1D3530;
+  --run:#EE9C4A; --run-soft:#3A2814; --danger:#F08A80; --danger-soft:#3D1D1A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111615; --surface:#19201F; --sunk:#141A19; --ink:#E4EBE8; --muted:#93A29E; --line:#2A3432;
+  --accent:#58BFA2; --accent-ink:#0D1A16; --accent-soft:#1D3530;
+  --run:#EE9C4A; --run-soft:#3A2814; --danger:#F08A80; --danger-soft:#3D1D1A; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top .wrap{display:flex;align-items:center;gap:16px;padding-block:10px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:700;font-size:1.35rem;letter-spacing:.02em;text-transform:uppercase;margin:0;display:flex;align-items:center;gap:8px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.brand .dot.on{background:var(--run);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.brand .dot.on{animation:none}}
+nav.tabs{display:flex;gap:4px;margin-left:auto}
+nav.tabs a{font-family:var(--f-display);font-weight:600;font-size:1.05rem;letter-spacing:.04em;text-transform:uppercase;text-decoration:none;color:var(--muted);padding:6px 12px;border-radius:8px}
+nav.tabs a[aria-current="page"]{color:var(--ink);background:var(--sunk)}
+
+main.wrap{padding-block:20px 60px;display:flex;flex-direction:column;gap:20px}
+.banner{padding:10px 14px;border-radius:var(--r);background:var(--run-soft);color:var(--ink);font-size:.95rem}
+
+h2.sec{font-family:var(--f-display);font-weight:600;font-size:.95rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+
+/* Timer */
+.timer{display:grid;gap:14px}
+.timer.running{border-color:var(--run);box-shadow:inset 4px 0 0 var(--run)}
+.timer-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.clock{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:clamp(2.4rem,9vw,3.4rem);font-weight:600;line-height:1;letter-spacing:-.02em}
+.running .clock{color:var(--run)}
+.meta{color:var(--muted);font-size:.95rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 140px}
+.field.wide{flex:2 1 260px}
+.field label{font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:42px}
+input[readonly]{color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.run{background:var(--run);color:#fff;border-color:var(--run)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.danger.solid{background:var(--danger);color:#fff}
+.btn.big{padding:12px 22px;font-size:1.05rem}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.err{color:var(--danger);font-size:.9rem;min-height:1.2em;margin:0}
+.note{font-size:.9rem;color:var(--muted);margin:0}
+.warn{font-size:.9rem;color:var(--run);margin:0}
+
+details.manual summary{cursor:pointer;font-weight:600;color:var(--accent);list-style:none}
+details.manual summary::-webkit-details-marker{display:none}
+details.manual summary::before{content:"+ ";}
+details.manual[open] summary::before{content:"− ";}
+details.manual[open] summary{margin-bottom:12px}
+.manual-body{display:grid;gap:12px}
+
+/* Day log */
+.dayhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.daytitle{font-family:var(--f-display);font-weight:700;font-size:1.7rem;margin:0;text-wrap:balance}
+.daynav{display:flex;gap:6px;align-items:center}
+.daynav input{width:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.stat{background:var(--surface);padding:12px 14px;min-width:0}
+.stat .k{font-size:.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:1.5rem;font-weight:600}
+.stat .v small{font-size:.8rem;color:var(--muted);font-weight:400;margin-left:4px}
+
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.log li{display:grid;grid-template-columns:7.5rem 1fr auto;gap:4px 14px;padding:12px 14px;border-top:1px solid var(--line);align-items:start}
+.log li:first-child{border-top:0}
+.log li.last{background:var(--accent-soft)}
+.log .when{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:.92rem}
+.log .when .h{display:block;font-weight:600;font-size:1.05rem}
+.log .what{min-width:0}
+.log .what p{margin:2px 0 0;overflow-wrap:anywhere;color:var(--muted)}
+.log .right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-num);font-weight:600;font-size:.9rem;padding:2px 8px;border-radius:6px;background:var(--sunk);border:1px solid var(--line)}
+.tag{font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px}
+.tag.last{background:var(--accent);color:var(--accent-ink)}
+.tag.open{background:var(--accent-soft);color:var(--accent)}
+.tag.done{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.tag.live{background:var(--run-soft);color:var(--run)}
+.tag.night{background:var(--sunk);color:var(--muted)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
+.empty strong{display:block;color:var(--ink);font-family:var(--f-display);font-size:1.2rem;margin-bottom:4px}
+
+.runtot{display:flex;flex-wrap:wrap;gap:8px}
+.runtot button{all:unset;cursor:pointer;display:flex;gap:10px;align-items:baseline;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.runtot button:hover{border-color:var(--accent)}
+.runtot button:focus-visible{outline:2px solid var(--accent)}
+.runtot .jn{font-family:var(--f-num);font-weight:600}
+.runtot .hrs{font-family:var(--f-num);color:var(--accent);font-weight:600}
+
+/* Jobs */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 12px;cursor:pointer;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{all:unset;box-sizing:border-box;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:8px}
+.card:hover{border-color:var(--accent)}
+.card:focus-visible{outline:2px solid var(--accent)}
+.card .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card .jn{font-family:var(--f-num);font-weight:600;font-size:1.15rem;overflow-wrap:anywhere}
+.card .hrs{font-family:var(--f-num);font-size:1.9rem;font-weight:600;line-height:1}
+.card .hrs small{font-size:.85rem;color:var(--muted);font-weight:400}
+.card .sub{display:flex;justify-content:space-between;color:var(--muted);font-size:.9rem;gap:8px}
+
+.detail-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.detail-head h3{font-family:var(--f-num);font-size:1.6rem;margin:4px 0 0;overflow-wrap:anywhere}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.stats.four{grid-template-columns:repeat(4,1fr)}
+.confirm{border:1px solid var(--accent);background:var(--accent-soft);border-radius:var(--r);padding:14px;display:grid;gap:10px}
+.confirm.danger{border-color:var(--danger);background:var(--danger-soft)}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--sunk);white-space:nowrap}
+td.n,th.n{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.t{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.c{min-width:180px;overflow-wrap:anywhere}
+tr.sub td{background:var(--sunk);font-weight:600}
+tfoot td{font-weight:700;border-bottom:0;background:var(--sunk)}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--accent-soft)}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(10,15,14,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+@media (min-width:640px){.overlay{align-items:center}}
+.modal{background:var(--surface);border-radius:14px;border:1px solid var(--line);width:100%;max-width:560px;max-height:calc(100% - 20px);overflow:auto;padding:18px;display:grid;gap:12px}
+.modal h3{font-family:var(--f-display);font-size:1.4rem;margin:0}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(20px,calc(env(safe-area-inset-bottom,0px) + 12px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:30;font-weight:600;max-width:calc(100% - 32px)}
+
+@media (max-width:560px){
+  .stats.four{grid-template-columns:repeat(2,1fr)}
+  .log li{grid-template-columns:1fr auto}
+  .log .when{grid-column:1/-1;display:flex;gap:10px;align-items:baseline}
+  .log .when .h{display:inline}
+  nav.tabs{margin-left:0;width:100%}
+  nav.tabs a{flex:1;text-align:center}
+  .stat .v{font-size:1.25rem}
+}
+html,body{margin:0}
+.demo-note{font-size:.85rem;color:var(--muted);margin:0}
+.backlink{font-size:.9rem;color:var(--muted);text-decoration:none}
+.backlink:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="backlink" href="/">‹ Portfolio</a>
+    <h1 class="brand"><span class="dot" id="brandDot"></span>Side Job Log</h1>
+    <nav class="tabs" aria-label="Views">
+      <a href="#today" id="tab-today">Today</a>
+      <a href="#jobs" id="tab-jobs">Jobs</a>
+      <a href="#history" id="tab-history">History</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <div class="banner" id="statusBanner" hidden></div>
+  <section id="view-today"></section>
+  <section id="view-jobs" hidden></section>
+  <section id="view-history" hidden></section>
+  <p class="demo-note">Demo: anything you enter is saved only in this browser on this device. Nothing is sent anywhere.</p>
+</main>
+<div id="modalRoot"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ---------- helpers ---------- */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const todayStr = () => ymd(new Date());
+const parseYmd = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate()+n); return ymd(d); };
+const hrs = min => (Math.round(min) / 60).toFixed(2);
+const money = v => (v == null || v === "" || isNaN(v)) ? "—" : "$" + Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const to12 = t => { if(!t) return ""; let [h,m] = t.split(":").map(Number); const ap = h>=12?"PM":"AM"; h = h%12||12; return `${h}:${pad(m)} ${ap}`; };
+const fmtDay = s => parseYmd(s).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+const fmtShort = s => parseYmd(s).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+const dow = s => parseYmd(s).toLocaleDateString("en-US",{weekday:"short"});
+const jobKey = j => String(j).trim().replace(/[^A-Za-z0-9_-]/g,"_").slice(0,120) || "_";
+function minutesBetween(date, start, end){
+  const [sh,sm] = start.split(":").map(Number), [eh,em] = end.split(":").map(Number);
+  let m = (eh*60+em) - (sh*60+sm);
+  const overnight = m <= 0;
+  if (overnight) m += 1440;
+  return { minutes:m, overnight };
+}
+function startTsOf(date, start){ const d = parseYmd(date); const [h,m]=start.split(":").map(Number); d.setHours(h,m,0,0); return d.getTime(); }
+function parsePay(v){ if (v == null) return null; const s = String(v).replace(/[$,\s]/g,""); if (s==="") return null; const n = Number(s); return isFinite(n) && n>=0 ? Math.round(n*100)/100 : NaN; }
+
+let toastT;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
+
+/* ---------- state ---------- */
+const S = {
+  entries: [], jobs: {}, timer: null, loaded: false,
+  view: "today", day: todayStr(), selectedJob: null, jobFilter: "open", jobSearch: "",
+  hist: { from:"", to:"", job:"" }, confirmComplete:false, confirmDiscard:false
+};
+
+/* ---------- storage: db capability with local fallback ---------- */
+const db = null; let mode = "local";
+const LS = "sideJobLogDemo.v1";
+function lsLoad(){ try{ const d = JSON.parse(localStorage.getItem(LS)||"null"); if(d){ S.entries=d.entries||[]; S.jobs=d.jobs||{}; S.timer=d.timer||null; } }catch(e){} }
+function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify({entries:S.entries,jobs:S.jobs,timer:S.timer})); }catch(e){} }
+
+const store = {
+  async addEntry(e){
+    if (db) return db.collection("entries").add(e);
+    e.id = "l"+Date.now()+Math.random().toString(36).slice(2,6); S.entries.push(e); lsSave(); render();
+  },
+  async updateEntry(id, e){
+    if (db) return db.doc("entries/"+id).set(e);
+    const i = S.entries.findIndex(x=>x.id===id); if(i>=0) S.entries[i] = {...e, id}; lsSave(); render();
+  },
+  async deleteEntry(id){
+    if (db) return db.doc("entries/"+id).delete();
+    S.entries = S.entries.filter(x=>x.id!==id); lsSave(); render();
+  },
+  async setJob(jobNumber, data){
+    const k = jobKey(jobNumber); const full = {...(S.jobs[k]||{}), ...data, jobNumber};
+    if (db) return db.doc("jobs/"+k).set(full);
+    S.jobs[k] = full; lsSave(); render();
+  },
+  async setTimer(t){
+    if (db) return t ? db.doc("state/timer").set(t) : db.doc("state/timer").delete();
+    S.timer = t; lsSave(); render();
+  }
+};
+
+function showBanner(msg){ const b=$("#statusBanner"); b.textContent=msg; b.hidden=!msg; }
+
+function connect(){
+  lsLoad(); S.loaded = true;
+  try { localStorage.setItem(LS+".t","1"); localStorage.removeItem(LS+".t"); }
+  catch(e){ showBanner("This browser is blocking storage, so entries will be lost when you close the page."); }
+  render();
+}
+
+/* ---------- derived ---------- */
+function jobStatus(jn){ const j = S.jobs[jobKey(jn)]; return j && j.status === "completed" ? "completed" : "open"; }
+function jobAggregates(){
+  const m = new Map();
+  for (const e of S.entries){
+    const k = e.jobNumber;
+    if (!m.has(k)) m.set(k, {jobNumber:k, minutes:0, payment:0, count:0, first:e.date, last:e.date, lastTs:0});
+    const a = m.get(k); a.minutes += e.minutes||0; a.payment += Number(e.payment)||0; a.count++;
+    if (e.date < a.first) a.first = e.date; if (e.date > a.last) a.last = e.date;
+    a.lastTs = Math.max(a.lastTs, e.endTs||0);
+  }
+  for (const a of m.values()){ a.status = jobStatus(a.jobNumber); a.meta = S.jobs[jobKey(a.jobNumber)]||{}; }
+  return m;
+}
+function liveMinutes(){ if(!S.timer) return 0; return Math.max(0, Math.floor((Date.now() - S.timer.startTs)/60000)); }
+function sortEntries(arr){ return arr.slice().sort((a,b)=> (a.startTs||0)-(b.startTs||0)); }
+
+/* ---------- routing ---------- */
+const VIEWS = ["today","jobs","history"];
+function route(){
+  const h = location.hash.replace("#","");
+  S.view = VIEWS.includes(h) ? h : "today";
+  for (const v of VIEWS){
+    $("#view-"+v).hidden = v!==S.view;
+    const t = $("#tab-"+v); if (v===S.view) t.setAttribute("aria-current","page"); else t.removeAttribute("aria-current");
+  }
+  render();
+}
+window.addEventListener("hashchange", route);
+
+/* ---------- render ---------- */
+function render(){
+  $("#brandDot").classList.toggle("on", !!S.timer);
+  if (S.view==="today") renderToday();
+  else if (S.view==="jobs") renderJobs();
+  else renderHistory();
+}
+
+function jobDatalist(){
+  const ag = jobAggregates();
+  const list = [...ag.values()].filter(a=>a.status==="open").sort((a,b)=>b.lastTs-a.lastTs).map(a=>`<option value="${esc(a.jobNumber)}">`).join("");
+  return `<datalist id="jobList">${list}</datalist>`;
+}
+
+/* ----- Today ----- */
+function renderToday(){
+  const el = $("#view-today");
+  // preserve typed values across re-renders
+  const keep = {};
+  el.querySelectorAll("input[id],textarea[id],select[id]").forEach(i => keep[i.id] = i.value);
+  const manualOpen = $("#manualBox") ? $("#manualBox").open : false;
+
+  if (!S.loaded){ el.innerHTML = `<div class="empty"><strong>Loading your log…</strong>Your entries and any running timer will appear here.</div>`; return; }
+
+  const ag = jobAggregates();
+  const day = S.day, isToday = day === todayStr();
+  const dayEntries = sortEntries(S.entries.filter(e=>e.date===day));
+  const dayMin = dayEntries.reduce((s,e)=>s+(e.minutes||0),0);
+  const dayPay = dayEntries.reduce((s,e)=>s+(Number(e.payment)||0),0);
+  const dayJobs = [...new Set(dayEntries.map(e=>e.jobNumber))];
+  let lastId = null; if (dayEntries.length){ lastId = dayEntries.reduce((a,b)=> (b.endTs||0)>(a.endTs||0)?b:a).id; }
+
+  const t = S.timer;
+  let timerHtml;
+  if (t){
+    const live = liveMinutes();
+    const a = ag.get(t.jobNumber);
+    const prior = a ? a.minutes : 0;
+    timerHtml = `
+    <div class="panel timer running" aria-live="polite">
+      <div class="timer-head">
+        <div><span class="tag live">Running</span> <span class="chip" style="margin-left:6px">Job ${esc(t.jobNumber)}</span></div>
+        <div class="meta">Started ${esc(to12(t.start))}${t.date!==todayStr()?" on "+esc(fmtShort(t.date)):""}</div>
+      </div>
+      <div class="clock" id="clock">0:00:00</div>
+      <p class="meta" style="margin:0">Job total with this session: <span class="num" id="liveJobTotal">${hrs(prior+live)}</span> hrs</p>
+      <div class="field"><label for="tmComments">Comments</label><textarea id="tmComments" rows="2" placeholder="What did you work on?">${esc(keep.tmComments ?? t.comments ?? "")}</textarea></div>
+      <div class="row">
+        <div class="field" style="flex:0 1 160px"><label for="tmPay">Payment (optional)</label><input id="tmPay" inputmode="decimal" placeholder="0.00" value="${esc(keep.tmPay ?? "")}"></div>
+        <button class="btn run big" id="stopBtn">Stop and save</button>
+        <button class="btn ghost" id="discardBtn">Discard</button>
+      </div>
+      ${S.confirmDiscard?`<div class="confirm danger"><p style="margin:0">Discard this running session? No entry will be saved.</p><div class="actions"><button class="btn danger solid" id="discardYes">Discard session</button><button class="btn" id="discardNo">Keep timing</button></div></div>`:""}
+      <p class="err" id="tmErr"></p>
+    </div>`;
+  } else {
+    timerHtml = `
+    <div class="panel timer">
+      <div class="timer-head"><h2 class="sec">Start a session</h2><span class="meta">Times round to the minute</span></div>
+      <div class="row">
+        <div class="field"><label for="tsJob">Job number</label><input id="tsJob" list="jobList" autocomplete="off" placeholder="e.g. 24-1187" value="${esc(keep.tsJob ?? "")}"></div>
+        <div class="field wide"><label for="tsComments">Comments (optional)</label><input id="tsComments" placeholder="Can add or change when you stop" value="${esc(keep.tsComments ?? "")}"></div>
+        <button class="btn primary big" id="startBtn">Start timer</button>
+      </div>
+      <p class="err" id="tsErr"></p>
+    </div>`;
+  }
+
+  const mDate = keep.mDate || day;
+  const manualHtml = `
+  <details class="panel manual" id="manualBox" ${manualOpen?"open":""}>
+    <summary>Add an entry by hand</summary>
+    <div class="manual-body">
+      <div class="row">
+        <div class="field"><label for="mJob">Job number</label><input id="mJob" list="jobList" autocomplete="off" value="${esc(keep.mJob ?? "")}"></div>
+        <div class="field"><label for="mDate">Date</label><input id="mDate" type="date" value="${esc(mDate)}"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="mStart">Start time</label><input id="mStart" type="time" value="${esc(keep.mStart ?? "")}"></div>
+        <div class="field"><label for="mEnd">End time</label><input id="mEnd" type="time" value="${esc(keep.mEnd ?? "")}"></div>
+        <div class="field"><label for="mTotal">Total time</label><input id="mTotal" readonly value="" class="num"></div>
+        <div class="field"><label for="mPay">Payment (optional)</label><input id="mPay" inputmode="decimal" placeholder="0.00" value="${esc(keep.mPay ?? "")}"></div>
+      </div>
+      <div class="field"><label for="mComments">Comments</label><textarea id="mComments" rows="2">${esc(keep.mComments ?? "")}</textarea></div>
+      <p class="warn" id="mWarn"></p>
+      <div class="row"><button class="btn primary" id="mSave">Save entry</button><p class="err" id="mErr"></p></div>
+    </div>
+  </details>`;
+
+  const listHtml = dayEntries.length ? `<ul class="log">${dayEntries.map(e=>`
+    <li class="${e.id===lastId?"last":""}">
+      <div class="when"><span class="h">${esc(to12(e.start))}</span>to ${esc(to12(e.end))}${e.overnight?` <span class="tag night">next day</span>`:""}</div>
+      <div class="what"><span class="chip">Job ${esc(e.jobNumber)}</span> ${e.id===lastId?`<span class="tag last">Last entry</span>`:""}${e.comments?`<p>${esc(e.comments)}</p>`:""}</div>
+      <div class="right"><span class="num" style="font-weight:600">${hrs(e.minutes)} hrs</span>${e.payment!=null&&e.payment!==""?`<span class="num meta">${money(e.payment)}</span>`:""}<button class="btn ghost" data-edit="${esc(e.id)}" style="padding:2px 6px">Edit</button></div>
+    </li>`).join("")}</ul>`
+    : `<div class="empty"><strong>No entries on this day</strong>${isToday?"Start the timer above or add an entry by hand. Each session you save shows up here in time order.":"Nothing was logged on this day."}</div>`;
+
+  const runTot = dayJobs.length ? `
+    <div style="display:grid;gap:8px"><h2 class="sec">Running totals, jobs worked this day</h2>
+    <div class="runtot">${dayJobs.map(j=>{const a=ag.get(j);return `<button data-job="${esc(j)}"><span class="jn">${esc(j)}</span><span class="hrs">${hrs(a.minutes)} hrs</span>${a.status==="completed"?`<span class="tag done">Done</span>`:""}</button>`}).join("")}</div></div>` : "";
+
+  el.innerHTML = `
+    <div style="display:grid;gap:20px">
+      ${jobDatalist()}
+      ${timerHtml}
+      ${manualHtml}
+      <div class="dayhead">
+        <h2 class="daytitle">${isToday?"Today · ":""}${esc(fmtDay(day))}</h2>
+        <div class="daynav">
+          <button class="btn" id="dPrev" aria-label="Previous day">‹</button>
+          <input type="date" id="dPick" value="${esc(day)}" aria-label="Pick a day">
+          <button class="btn" id="dNext" aria-label="Next day">›</button>
+          ${isToday?"":`<button class="btn" id="dToday">Today</button>`}
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Hours</div><div class="v">${hrs(dayMin)}</div></div>
+        <div class="stat"><div class="k">Sessions</div><div class="v">${dayEntries.length}</div></div>
+        <div class="stat"><div class="k">Payments</div><div class="v">${money(dayPay)}</div></div>
+      </div>
+      ${listHtml}
+      ${runTot}
+    </div>`;
+
+  // wire
+  if (t){
+    $("#stopBtn").onclick = stopTimer;
+    $("#discardBtn").onclick = () => { S.confirmDiscard = true; render(); };
+    if (S.confirmDiscard){ $("#discardYes").onclick = async()=>{ S.confirmDiscard=false; await store.setTimer(null).catch(err=>toast("Couldn't discard: "+(err.code||"error"))); toast("Session discarded"); }; $("#discardNo").onclick=()=>{S.confirmDiscard=false;render();}; }
+    tick();
+  } else {
+    $("#startBtn").onclick = startTimer;
+    $("#tsJob").addEventListener("keydown", ev=>{ if(ev.key==="Enter") startTimer(); });
+  }
+  const mUpd = () => {
+    const s=$("#mStart").value, e=$("#mEnd").value, jn=$("#mJob").value.trim();
+    let w = "";
+    if (s && e){ const r = minutesBetween($("#mDate").value, s, e); $("#mTotal").value = hrs(r.minutes)+" hrs"; if(r.overnight) w = s===e ? "Start and end are the same, which would count as 24 hours." : "End time is earlier than start, so this counts as ending the next day."; }
+    else $("#mTotal").value = "";
+    if (jn && jobStatus(jn)==="completed") w = (w?w+" ":"") + `Job ${jn} is marked complete. Saving will reopen it.`;
+    $("#mWarn").textContent = w;
+  };
+  ["mStart","mEnd","mDate","mJob"].forEach(id=>$("#"+id).addEventListener("input", mUpd)); mUpd();
+  $("#mSave").onclick = saveManual;
+  $("#dPrev").onclick = ()=>{ S.day = addDays(S.day,-1); render(); };
+  $("#dNext").onclick = ()=>{ S.day = addDays(S.day,1); render(); };
+  $("#dPick").onchange = ev=>{ if(ev.target.value){ S.day = ev.target.value; render(); } };
+  if ($("#dToday")) $("#dToday").onclick = ()=>{ S.day = todayStr(); render(); };
+  el.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
+  el.querySelectorAll(".runtot [data-job]").forEach(b=>b.onclick=()=>{ S.selectedJob=b.dataset.job; S.confirmComplete=false; location.hash="jobs"; });
+}
+
+let tickT;
+function tick(){
+  clearInterval(tickT);
+  const upd = () => {
+    if (!S.timer){ clearInterval(tickT); return; }
+    const c = $("#clock"); if (!c){ return; }
+    const ms = Math.max(0, Date.now() - S.timer.startTs);
+    const s = Math.floor(ms/1000);
+    c.textContent = `${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;
+    const a = jobAggregates().get(S.timer.jobNumber);
+    const jt = $("#liveJobTotal"); if (jt) jt.textContent = hrs((a?a.minutes:0) + liveMinutes());
+  };
+  upd(); tickT = setInterval(upd, 1000);
+}
+
+async function startTimer(){
+  const jn = $("#tsJob").value.trim();
+  if (!jn){ $("#tsErr").textContent = "Enter a job number to start the timer."; $("#tsJob").focus(); return; }
+  const now = new Date(); now.setSeconds(0,0);
+  $("#startBtn").disabled = true;
+  try {
+    await store.setTimer({ jobNumber: jn, date: ymd(now), start: hm(now), startTs: now.getTime(), comments: $("#tsComments").value.trim() });
+    if (jobStatus(jn)==="completed") await store.setJob(jn, {status:"open", completedAt:null});
+    $("#tsJob").value=""; $("#tsComments").value="";
+    toast(`Timer started for job ${jn}`);
+  } catch(err){ $("#tsErr").textContent = "Couldn't start the timer ("+(err.code||"error")+"). Try again."; $("#startBtn").disabled=false; }
+}
+
+async function stopTimer(){
+  const t = S.timer; if (!t) return;
+  const pay = parsePay($("#tmPay").value);
+  if (Number.isNaN(pay)){ $("#tmErr").textContent = "Payment must be a number, like 150 or 150.00."; return; }
+  const now = new Date(); now.setSeconds(0,0);
+  let minutes = Math.round((now.getTime() - t.startTs)/60000);
+  if (minutes < 1){ $("#tmErr").textContent = "This session is under a minute. Keep timing, or use Discard."; return; }
+  const entry = {
+    jobNumber: t.jobNumber, date: t.date, start: t.start, end: hm(now),
+    startTs: t.startTs, endTs: now.getTime(), minutes, overnight: ymd(now)!==t.date,
+    comments: $("#tmComments").value.trim(), payment: pay, createdAt: Date.now()
+  };
+  $("#stopBtn").disabled = true;
+  try {
+    await store.addEntry(entry);
+    await store.setTimer(null);
+    toast(`Saved ${hrs(minutes)} hrs to job ${t.jobNumber}`);
+  } catch(err){ $("#tmErr").textContent = "Couldn't save the session ("+(err.code||"error")+"). The timer is still running; try again."; $("#stopBtn").disabled=false; }
+}
+
+function readEntryForm(p){
+  const jn = $("#"+p+"Job").value.trim(), date = $("#"+p+"Date").value, s = $("#"+p+"Start").value, e = $("#"+p+"End").value;
+  const pay = parsePay($("#"+p+"Pay").value);
+  if (!jn) return {err:"Enter a job number."};
+  if (!date) return {err:"Pick a date."};
+  if (!s || !e) return {err:"Enter both a start and end time."};
+  if (s === e) return {err:"Start and end can't be the same time."};
+  if (Number.isNaN(pay)) return {err:"Payment must be a number, like 150 or 150.00."};
+  const r = minutesBetween(date, s, e);
+  const startTs = startTsOf(date, s);
+  return { entry: { jobNumber: jn, date, start: s, end: e, startTs, endTs: startTs + r.minutes*60000, minutes: r.minutes, overnight: r.overnight, comments: $("#"+p+"Comments").value.trim(), payment: pay } };
+}
+
+async function saveManual(){
+  const r = readEntryForm("m");
+  if (r.err){ $("#mErr").textContent = r.err; return; }
+  r.entry.createdAt = Date.now();
+  $("#mSave").disabled = true;
+  try {
+    await store.addEntry(r.entry);
+    if (jobStatus(r.entry.jobNumber)==="completed") await store.setJob(r.entry.jobNumber, {status:"open", completedAt:null});
+    ["mStart","mEnd","mPay","mComments","mTotal"].forEach(id=>$("#"+id).value="");
+    $("#mErr").textContent=""; $("#mWarn").textContent="";
+    toast(`Saved ${hrs(r.entry.minutes)} hrs to job ${r.entry.jobNumber}`);
+    if (r.entry.date !== S.day){ S.day = r.entry.date; }
+    render();
+  } catch(err){ $("#mErr").textContent = "Couldn't save ("+(err.code||"error")+"). Try again."; }
+  finally { const b=$("#mSave"); if(b) b.disabled=false; }
+}
+
+/* ----- Edit modal ----- */
+function openEdit(id){
+  const e = S.entries.find(x=>x.id===id); if (!e) return;
+  const root = $("#modalRoot");
+  root.innerHTML = `
+  <div class="overlay" id="ov">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+      <h3 id="edTitle">Edit entry</h3>
+      <div class="row">
+        <div class="field"><label for="eJob">Job number</label><input id="eJob" list="jobList" value="${esc(e.jobNumber)}"></div>
+        <div class="field"><label for="eDate">Date</label><input id="eDate" type="date" value="${esc(e.date)}"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="eStart">Start</label><input id="eStart" type="time" value="${esc(e.start)}"></div>
+        <div class="field"><label for="eEnd">End</label><input id="eEnd" type="time" value="${esc(e.end)}"></div>
+        <div class="field"><label for="eTotal">Total</label><input id="eTotal" readonly class="num"></div>
+      </div>
+      <div class="field"><label for="ePay">Payment (optional)</label><input id="ePay" inputmode="decimal" value="${e.payment==null?"":esc(e.payment)}"></div>
+      <div class="field"><label for="eComments">Comments</label><textarea id="eComments" rows="3">${esc(e.comments)}</textarea></div>
+      <p class="err" id="eErr"></p>
+      <div id="eDelBox"></div>
+      <div class="actions" style="justify-content:space-between">
+        <button class="btn danger" id="eDel">Delete</button>
+        <div class="actions"><button class="btn" id="eCancel">Cancel</button><button class="btn primary" id="eSave">Save changes</button></div>
+      </div>
+    </div>
+  </div>`;
+  const close = () => { root.innerHTML = ""; };
+  const upd = () => { const s=$("#eStart").value, en=$("#eEnd").value; $("#eTotal").value = (s&&en&&s!==en) ? hrs(minutesBetween($("#eDate").value,s,en).minutes)+" hrs" : ""; };
+  ["eStart","eEnd"].forEach(i=>$("#"+i).addEventListener("input",upd)); upd();
+  $("#eCancel").onclick = close;
+  $("#ov").addEventListener("click", ev=>{ if(ev.target.id==="ov") close(); });
+  document.addEventListener("keydown", function k(ev){ if(ev.key==="Escape"){ close(); document.removeEventListener("keydown",k);} });
+  $("#eSave").onclick = async () => {
+    const r = readEntryForm("e"); if (r.err){ $("#eErr").textContent = r.err; return; }
+    r.entry.createdAt = e.createdAt || Date.now();
+    try { await store.updateEntry(id, r.entry); close(); toast("Entry updated"); } catch(err){ $("#eErr").textContent = "Couldn't save ("+(err.code||"error")+")."; }
+  };
+  $("#eDel").onclick = () => {
+    $("#eDelBox").innerHTML = `<div class="confirm danger"><p style="margin:0">Delete this ${hrs(e.minutes)} hr entry for job ${esc(e.jobNumber)}? This can't be undone.</p><div class="actions"><button class="btn danger solid" id="eDelYes">Delete entry</button><button class="btn" id="eDelNo">Keep it</button></div></div>`;
+    $("#eDelNo").onclick = () => $("#eDelBox").innerHTML = "";
+    $("#eDelYes").onclick = async () => { try { await store.deleteEntry(id); close(); toast("Entry deleted"); } catch(err){ $("#eErr").textContent = "Couldn't delete ("+(err.code||"error")+")."; } };
+  };
+  $("#eJob").focus();
+}
+
+/* ----- Jobs ----- */
+function renderJobs(){
+  const el = $("#view-jobs");
+  if (!S.loaded){ el.innerHTML = `<div class="empty"><strong>Loading jobs…</strong></div>`; return; }
+  const ag = jobAggregates();
+  if (S.selectedJob && ag.has(S.selectedJob)) return renderJobDetail(el, ag.get(S.selectedJob));
+  S.selectedJob = null;
+  const q = S.jobSearch.toLowerCase();
+  let list = [...ag.values()].filter(a => (S.jobFilter==="all" || (S.jobFilter==="open" ? a.status==="open" : a.status==="completed")) && (!q || a.jobNumber.toLowerCase().includes(q)));
+  list.sort((a,b)=> b.lastTs - a.lastTs);
+  const counts = {open:0,completed:0}; for (const a of ag.values()) counts[a.status]++;
+  el.innerHTML = `
+  <div style="display:grid;gap:16px">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Filter jobs">
+        <button data-f="open" aria-pressed="${S.jobFilter==="open"}">Open (${counts.open})</button>
+        <button data-f="completed" aria-pressed="${S.jobFilter==="completed"}">Completed (${counts.completed})</button>
+        <button data-f="all" aria-pressed="${S.jobFilter==="all"}">All</button>
+      </div>
+      <input id="jobSearch" placeholder="Find a job number" style="max-width:220px" value="${esc(S.jobSearch)}">
+    </div>
+    ${list.length ? `<div class="cards">${list.map(a=>`
+      <button class="card" data-job="${esc(a.jobNumber)}">
+        <div class="t"><span class="jn">${esc(a.jobNumber)}</span><span class="tag ${a.status==="completed"?"done":"open"}">${a.status==="completed"?"Completed":"Open"}</span></div>
+        <div class="hrs">${hrs(a.minutes)}<small> hrs</small></div>
+        <div class="sub"><span>${a.count} session${a.count===1?"":"s"}</span><span class="num">${money(a.payment)}</span></div>
+        <div class="sub"><span>${a.first===a.last?esc(fmtShort(a.first)):esc(fmtShort(a.first))+" – "+esc(fmtShort(a.last))}</span></div>
+      </button>`).join("")}</div>`
+      : `<div class="empty"><strong>${ag.size?"No jobs match":"No jobs yet"}</strong>${ag.size?"Try another filter or search.":"A job appears here as soon as you log its first session on the Today tab."}</div>`}
+  </div>`;
+  el.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ S.jobFilter=b.dataset.f; render(); });
+  const js = $("#jobSearch"); js.oninput = ev => { S.jobSearch = ev.target.value; const pos = ev.target.selectionStart; render(); const n=$("#jobSearch"); n.focus(); n.setSelectionRange(pos,pos); };
+  el.querySelectorAll(".card").forEach(b=>b.onclick=()=>{ S.selectedJob=b.dataset.job; S.confirmComplete=false; render(); window.scrollTo(0,0); });
+}
+
+function renderJobDetail(el, a){
+  const entries = sortEntries(S.entries.filter(e=>e.jobNumber===a.jobNumber));
+  const byDay = new Map(); entries.forEach(e=>{ if(!byDay.has(e.date)) byDay.set(e.date,[]); byDay.get(e.date).push(e); });
+  const done = a.status==="completed";
+  const meta = a.meta||{};
+  const running = S.timer && S.timer.jobNumber===a.jobNumber;
+  let rows = "";
+  for (const [d, list] of byDay){
+    const dm = list.reduce((s,e)=>s+e.minutes,0), dp = list.reduce((s,e)=>s+(Number(e.payment)||0),0);
+    rows += list.map(e=>`<tr class="click" data-edit="${esc(e.id)}"><td class="t">${esc(dow(d))} ${esc(fmtShort(d))}</td><td class="t">${esc(to12(e.start))}</td><td class="t">${esc(to12(e.end))}${e.overnight?" (+1)":""}</td><td class="n">${hrs(e.minutes)}</td><td class="c">${esc(e.comments)}</td><td class="n">${e.payment==null?"":money(e.payment)}</td></tr>`).join("");
+    if (byDay.size>1) rows += `<tr class="sub"><td colspan="3">Day total</td><td class="n">${hrs(dm)}</td><td></td><td class="n">${dp?money(dp):""}</td></tr>`;
+  }
+  el.innerHTML = `
+  <div style="display:grid;gap:16px">
+    <div><button class="btn ghost" id="backJobs" style="padding-left:0">‹ All jobs</button></div>
+    <div class="detail-head">
+      <div><span class="tag ${done?"done":"open"}">${done?"Completed "+esc(fmtShort(meta.completedDate||a.last)):"Open"}</span>${running?` <span class="tag live">Timer running</span>`:""}<h3>Job ${esc(a.jobNumber)}</h3></div>
+      <div class="actions">
+        <button class="btn" id="invBtn">Export invoice (.xlsx)</button>
+        ${done?`<button class="btn" id="reopenBtn">Reopen job</button>`:`<button class="btn primary" id="completeBtn">Mark job complete</button>`}
+      </div>
+    </div>
+    ${S.confirmComplete && !done ? `<div class="confirm">
+      <p style="margin:0"><strong>Final totals for job ${esc(a.jobNumber)}:</strong> <span class="num">${hrs(a.minutes)} hrs</span> over ${a.count} session${a.count===1?"":"s"}, total payment <span class="num">${money(a.payment)}</span>.</p>
+      ${running?`<p class="warn">A timer is still running on this job. Stop it first so its time is included.</p>`:""}
+      <div class="actions"><button class="btn primary" id="completeYes" ${running?"disabled":""}>Complete and export invoice</button><button class="btn" id="completeOnly" ${running?"disabled":""}>Complete without export</button><button class="btn" id="completeNo">Cancel</button></div>
+    </div>`:""}
+    <div class="stats four">
+      <div class="stat"><div class="k">Total time</div><div class="v">${hrs(a.minutes)}<small>hrs</small></div></div>
+      <div class="stat"><div class="k">Total payment</div><div class="v">${money(a.payment)}</div></div>
+      <div class="stat"><div class="k">Sessions</div><div class="v">${a.count}</div></div>
+      <div class="stat"><div class="k">Days worked</div><div class="v">${byDay.size}</div></div>
+    </div>
+    <p class="note">Tap a row to edit it.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Date</th><th>Start</th><th>End</th><th class="n">Hours</th><th>Comments</th><th class="n">Payment</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3">Job total</td><td class="n">${hrs(a.minutes)}</td><td></td><td class="n">${money(a.payment)}</td></tr></tfoot>
+    </table></div>
+  </div>`;
+  $("#backJobs").onclick = ()=>{ S.selectedJob=null; S.confirmComplete=false; render(); };
+  $("#invBtn").onclick = ()=>exportInvoice(a.jobNumber);
+  el.querySelectorAll("[data-edit]").forEach(r=>r.onclick=()=>openEdit(r.dataset.edit));
+  if (done) $("#reopenBtn").onclick = async()=>{ await store.setJob(a.jobNumber,{status:"open",completedAt:null,completedDate:null}); toast(`Job ${a.jobNumber} reopened`); };
+  else {
+    $("#completeBtn").onclick = ()=>{ S.confirmComplete=true; render(); };
+    if (S.confirmComplete){
+      const complete = async (exp) => {
+        await store.setJob(a.jobNumber,{status:"completed",completedAt:Date.now(),completedDate:todayStr(),finalMinutes:a.minutes,finalPayment:a.payment});
+        S.confirmComplete=false; toast(`Job ${a.jobNumber} marked complete`);
+        if (exp) exportInvoice(a.jobNumber);
+      };
+      $("#completeYes").onclick = ()=>complete(true);
+      $("#completeOnly").onclick = ()=>complete(false);
+      $("#completeNo").onclick = ()=>{ S.confirmComplete=false; render(); };
+    }
+  }
+}
+
+/* ----- History ----- */
+function histFiltered(){
+  const h = S.hist;
+  return sortEntries(S.entries.filter(e => (!h.from || e.date>=h.from) && (!h.to || e.date<=h.to) && (!h.job || e.jobNumber===h.job)));
+}
+function renderHistory(){
+  const el = $("#view-history");
+  if (!S.loaded){ el.innerHTML = `<div class="empty"><strong>Loading history…</strong></div>`; return; }
+  const jobs = [...new Set(S.entries.map(e=>e.jobNumber))].sort();
+  const list = histFiltered().reverse();
+  const tm = list.reduce((s,e)=>s+e.minutes,0), tp = list.reduce((s,e)=>s+(Number(e.payment)||0),0);
+  const filtered = S.hist.from||S.hist.to||S.hist.job;
+  el.innerHTML = `
+  <div style="display:grid;gap:16px">
+    <div class="panel" style="display:grid;gap:12px">
+      <div class="row">
+        <div class="field"><label for="hFrom">From</label><input type="date" id="hFrom" value="${esc(S.hist.from)}"></div>
+        <div class="field"><label for="hTo">To</label><input type="date" id="hTo" value="${esc(S.hist.to)}"></div>
+        <div class="field"><label for="hJob">Job</label><select id="hJob"><option value="">All jobs</option>${jobs.map(j=>`<option ${j===S.hist.job?"selected":""}>${esc(j)}</option>`).join("")}</select></div>
+        ${filtered?`<button class="btn ghost" id="hClear">Clear filters</button>`:""}
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <p class="note">Database export: one row per session, plus a Job Totals sheet. ${filtered?"Exports the filtered entries.":"Exports every entry."}</p>
+        <button class="btn primary" id="dbExport" ${list.length?"":"disabled"}>Export ${list.length} entr${list.length===1?"y":"ies"} (.xlsx)</button>
+      </div>
+    </div>
+    ${list.length?`<div class="tbl-wrap"><table>
+      <thead><tr><th>Job</th><th>Date</th><th>Start</th><th>End</th><th class="n">Hours</th><th>Comments</th><th class="n">Payment</th></tr></thead>
+      <tbody>${list.map(e=>`<tr class="click" data-edit="${esc(e.id)}"><td class="t">${esc(e.jobNumber)}</td><td class="t">${esc(dow(e.date))} ${esc(fmtShort(e.date))}</td><td class="t">${esc(to12(e.start))}</td><td class="t">${esc(to12(e.end))}${e.overnight?" (+1)":""}</td><td class="n">${hrs(e.minutes)}</td><td class="c">${esc(e.comments)}</td><td class="n">${e.payment==null?"":money(e.payment)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="4">${list.length} entr${list.length===1?"y":"ies"}</td><td class="n">${hrs(tm)}</td><td></td><td class="n">${money(tp)}</td></tr></tfoot>
+    </table></div>`:`<div class="empty"><strong>${S.entries.length?"No entries match these filters":"No entries yet"}</strong>${S.entries.length?"Widen the dates or pick another job.":"Every session you log, by timer or by hand, is kept here."}</div>`}
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="wipeBtn" ${S.entries.length||S.timer?"":"disabled"}>Erase all data</button></div>
+    <div id="wipeBox"></div>
+  </div>`;
+  $("#hFrom").onchange = ev=>{ S.hist.from=ev.target.value; render(); };
+  $("#hTo").onchange = ev=>{ S.hist.to=ev.target.value; render(); };
+  $("#hJob").onchange = ev=>{ S.hist.job=ev.target.value; render(); };
+  if ($("#hClear")) $("#hClear").onclick = ()=>{ S.hist={from:"",to:"",job:""}; render(); };
+  $("#dbExport").onclick = exportDatabase;
+  const wipe = $("#wipeBox");
+  $("#wipeBtn").onclick = () => {
+    wipe.innerHTML = `<div class="confirm danger"><p style="margin:0">Erase every entry, job and running timer saved in this browser? This can't be undone.</p><div class="actions"><button class="btn danger solid" id="wipeYes">Erase all data</button><button class="btn" id="wipeNo">Keep it</button></div></div>`;
+    $("#wipeNo").onclick = () => wipe.innerHTML = "";
+    $("#wipeYes").onclick = () => { S.entries=[]; S.jobs={}; S.timer=null; S.hist={from:"",to:"",job:""}; lsSave(); toast("All data erased"); render(); };
+  };
+  el.querySelectorAll("[data-edit]").forEach(r=>r.onclick=()=>openEdit(r.dataset.edit));
+}
+
+/* ---------- Excel export ---------- */
+const xlDate = s => { const [y,m,d] = s.split("-").map(Number); return (Date.UTC(y,m-1,d) - Date.UTC(1899,11,30)) / 86400000; };
+const xlTime = t => { const [h,m] = t.split(":").map(Number); return (h*60+m)/1440; };
+const cD = s => ({t:"n", v:xlDate(s), z:"mm/dd/yyyy"});
+const cT = t => ({t:"n", v:xlTime(t), z:"h:mm AM/PM"});
+const cH = min => ({t:"n", v:Math.round(min)/60, z:"0.00"});
+const cM = v => (v==null||v==="") ? {t:"s", v:""} : ({t:"n", v:Number(v), z:"$#,##0.00"});
+
+function saveXlsx(wb, filename){
+  if (typeof XLSX === "undefined"){ toast("The Excel library didn't load. Reload and try again."); return; }
+  try { XLSX.writeFile(wb, filename); toast("Exported "+filename); }
+  catch(err){ toast("Export failed. Try again."); }
+}
+
+function exportDatabase(){
+  const list = histFiltered();
+  const ag = jobAggregates();
+  const head = ["Job Number","Date","Day","Start Time","End Time","Total Hours","Comments","Payment","Job Status"];
+  const rows = [head.map(h=>({t:"s",v:h}))];
+  list.forEach(e => rows.push([{t:"s",v:e.jobNumber}, cD(e.date), {t:"s",v:dow(e.date)}, cT(e.start), cT(e.end), cH(e.minutes), {t:"s",v:e.comments||""}, cM(e.payment), {t:"s",v:jobStatus(e.jobNumber)==="completed"?"Completed":"Open"}]));
+  const n = list.length + 1;
+  rows.push([]);
+  rows.push([{t:"s",v:"Totals"},"","","","",{t:"n",f:`SUM(F2:F${n})`,v:list.reduce((s,e)=>s+e.minutes,0)/60,z:"0.00"},"",{t:"n",f:`SUM(H2:H${n})`,v:list.reduce((s,e)=>s+(Number(e.payment)||0),0),z:"$#,##0.00"},""]);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{wch:14},{wch:12},{wch:6},{wch:11},{wch:11},{wch:11},{wch:48},{wch:12},{wch:11}];
+  ws["!autofilter"] = {ref:`A1:I${n}`};
+
+  const jobsInList = [...new Set(list.map(e=>e.jobNumber))];
+  const jh = ["Job Number","Status","Completed On","Sessions","First Date","Last Date","Total Hours","Total Payment"];
+  const jr = [jh.map(h=>({t:"s",v:h}))];
+  jobsInList.forEach(j => { const sub = list.filter(e=>e.jobNumber===j); const a = ag.get(j); const m = sub.reduce((s,e)=>s+e.minutes,0), p = sub.reduce((s,e)=>s+(Number(e.payment)||0),0);
+    const first = sub.reduce((x,e)=>e.date<x?e.date:x, sub[0].date), last = sub.reduce((x,e)=>e.date>x?e.date:x, sub[0].date);
+    jr.push([{t:"s",v:j},{t:"s",v:a.status==="completed"?"Completed":"Open"}, a.meta.completedDate?cD(a.meta.completedDate):{t:"s",v:""},{t:"n",v:sub.length}, cD(first), cD(last), cH(m), cM(p)]); });
+  const ws2 = XLSX.utils.aoa_to_sheet(jr);
+  ws2["!cols"] = [{wch:14},{wch:11},{wch:13},{wch:9},{wch:12},{wch:12},{wch:12},{wch:14}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Entries");
+  XLSX.utils.book_append_sheet(wb, ws2, "Job Totals");
+  saveXlsx(wb, `Side Jobs Log ${todayStr()}.xlsx`);
+}
+
+function exportInvoice(jobNumber){
+  const entries = sortEntries(S.entries.filter(e=>e.jobNumber===jobNumber));
+  if (!entries.length){ toast("This job has no entries to export."); return; }
+  const a = jobAggregates().get(jobNumber);
+  const s = v => ({t:"s", v});
+  const rows = [
+    [s("INVOICE")],
+    [],
+    [s("Job Number"), s(jobNumber)],
+    [s("Invoice Date"), cD(todayStr())],
+    [s("Work Period"), s(fmtShort(entries[0].date) + (a.first!==a.last ? " – " + fmtShort(a.last) : ""))],
+    [s("Status"), s(a.status==="completed" ? "Completed " + fmtShort(a.meta.completedDate || todayStr()) : "In progress")],
+    [],
+    ["Date","Day","Start Time","End Time","Hours","Description","Payment"].map(s)
+  ];
+  const first = rows.length + 1;
+  entries.forEach(e => rows.push([cD(e.date), s(dow(e.date)), cT(e.start), cT(e.end), cH(e.minutes), s(e.comments||""), cM(e.payment)]));
+  const last = rows.length;
+  rows.push([]);
+  rows.push(["","","",s("Total Hours"),{t:"n",f:`SUM(E${first}:E${last})`,v:a.minutes/60,z:"0.00"}]);
+  rows.push(["","","",s("Total Payment"),{t:"n",f:`SUM(G${first}:G${last})`,v:a.payment,z:"$#,##0.00"}]);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{wch:12},{wch:6},{wch:11},{wch:13},{wch:9},{wch:50},{wch:13}];
+  ws["!merges"] = [{s:{r:0,c:0},e:{r:0,c:2}}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Invoice");
+  saveXlsx(wb, `Invoice Job ${jobKey(jobNumber)} ${todayStr()}.xlsx`);
+}
+
+/* ---------- boot ---------- */
+route();
+connect();
+// roll "today" forward at midnight if the viewer was on today
+let lastToday = todayStr();
+setInterval(()=>{ const t = todayStr(); if (t!==lastToday){ if (S.day===lastToday) S.day=t; lastToday=t; render(); } }, 30000);
+})();
+</script>
+</body>
+</html>

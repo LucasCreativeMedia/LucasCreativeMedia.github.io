@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Capital &amp; Expense Hours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: timesheet desk — week bar on top, entry form beside the weekly grid, daily output cards below */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --surface-2:#eef1f4; --line:#d7dde3; --line-strong:#b9c2cb;
+  --fg:#17202a; --muted:#5b6774;
+  --cap:#1d5f8c; --cap-soft:#e3eef6; --exp:#a35a0b; --exp-soft:#f8ecdd;
+  --accent:#17202a; --accent-fg:#ffffff; --ok:#2e7d4f; --danger:#b3261e;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12171c; --surface:#1a2128; --surface-2:#222b33; --line:#2e3943; --line-strong:#43515e;
+  --fg:#e7ecf1; --muted:#97a4b1;
+  --cap:#6db3e3; --cap-soft:#1b2d3b; --exp:#e6a35a; --exp-soft:#382a1b;
+  --accent:#e7ecf1; --accent-fg:#12171c; --ok:#6fcf97; --danger:#f2867e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12171c; --surface:#1a2128; --surface-2:#222b33; --line:#2e3943; --line-strong:#43515e;
+  --fg:#e7ecf1; --muted:#97a4b1;
+  --cap:#6db3e3; --cap-soft:#1b2d3b; --exp:#e6a35a; --exp-soft:#382a1b;
+  --accent:#e7ecf1; --accent-fg:#12171c; --ok:#6fcf97; --danger:#f2867e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:20px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:2rem;font-weight:700;line-height:1}
+h2{font-size:1.35rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cap);outline-offset:2px}
+.btn{border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);border-radius:6px;padding:8px 12px;font-weight:600;font-size:.9rem;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:hover{opacity:.9}
+.btn.sm{padding:4px 8px;font-size:.8rem}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.top .sub{color:var(--muted);font-size:.9rem;margin-top:4px}
+.filebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.status{font-size:.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.status.ok i{background:var(--ok)}
+
+/* week bar */
+.weekbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.weeknav{display:flex;align-items:center;gap:6px}
+.weektitle{font-family:var(--display);font-size:1.4rem;font-weight:600;min-width:0}
+.totals{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;flex-direction:column;padding:6px 12px;border-radius:8px;background:var(--surface-2);min-width:96px}
+.chip b{font-family:var(--mono);font-size:1.15rem;font-weight:600}
+.chip.cap{background:var(--cap-soft)} .chip.cap .label{color:var(--cap)}
+.chip.exp{background:var(--exp-soft)} .chip.exp .label{color:var(--exp)}
+.chip.grand{background:var(--accent);color:var(--accent-fg)} .chip.grand .label{color:var(--accent-fg);opacity:.75}
+
+/* main row */
+.main{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel>h2{margin-bottom:12px}
+
+/* form */
+form{display:grid;gap:14px}
+.field{display:grid;gap:6px}
+.field label,.field .label{display:block}
+select,input[type=text]{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line-strong);border-radius:6px;padding:9px 10px}
+.days{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.days button,.seg button{border:1px solid var(--line-strong);background:var(--bg);color:var(--fg);border-radius:6px;padding:7px 0;font-weight:600;font-size:.85rem;display:flex;flex-direction:column;align-items:center;line-height:1.15}
+.days button small{font-weight:400;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+.days button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.days button[aria-pressed=true] small{color:var(--accent-fg);opacity:.75}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.seg button{padding:9px 0}
+.seg button[data-cat=capital][aria-pressed=true]{background:var(--cap);border-color:var(--cap);color:var(--surface)}
+.seg button[data-cat=expense][aria-pressed=true]{background:var(--exp);border-color:var(--exp);color:var(--surface)}
+.hm{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.unit{display:flex;align-items:center;gap:6px}
+.unit input{font-family:var(--mono);font-size:1.25rem;font-weight:500;text-align:right;min-width:0}
+.unit span{font-size:.85rem;color:var(--muted);font-weight:600}
+.hint{font-size:.78rem;color:var(--muted)}
+.err{font-size:.82rem;color:var(--danger);min-height:1.1em}
+.formactions{display:flex;gap:8px;flex-wrap:wrap}
+.formactions .primary{flex:1;justify-content:center;padding:10px}
+.editing-note{font-size:.82rem;background:var(--surface-2);border-radius:6px;padding:6px 10px}
+
+/* grid table */
+.tablewrap{overflow-x:auto;margin:0 -4px;padding:0 4px}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line-strong)}
+thead th small{display:block;font-family:var(--mono);text-transform:none;letter-spacing:0;font-weight:400}
+thead th.today{color:var(--fg)}
+td.v{font-family:var(--mono)}
+td.zero{color:var(--line-strong)}
+tr.group td{background:transparent;font-family:var(--display);font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:none;padding-top:14px}
+tr.group.cap td{color:var(--cap)} tr.group.exp td{color:var(--exp)}
+tr.proj td:first-child{padding-left:20px}
+tr.sub td{font-weight:600}
+tr.sub.cap td{background:var(--cap-soft)} tr.sub.exp td{background:var(--exp-soft)}
+tr.sub.cap td:first-child{color:var(--cap)} tr.sub.exp td:first-child{color:var(--exp)}
+tr.day td{font-weight:700;border-top:2px solid var(--line-strong);border-bottom:none;padding-top:10px}
+td.wk{background:var(--surface-2)}
+tr.day td.grand{background:var(--accent);color:var(--accent-fg)}
+
+/* output cards */
+.outhead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.outhead p{margin:0;color:var(--muted);font-size:.88rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;min-width:0}
+.card.today{border-color:var(--line-strong);box-shadow:0 0 0 1px var(--line-strong)}
+.card header{display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-bottom:1px solid var(--line)}
+.card header h3{font-size:1.25rem;font-weight:600}
+.card header h3 small{font-family:var(--mono);font-size:.78rem;color:var(--muted);font-weight:400;margin-left:6px}
+.card header .daytot{font-family:var(--mono);font-weight:600;font-size:1.05rem}
+.cat{padding:10px 14px;display:grid;gap:6px}
+.cat+.cat{border-top:1px dashed var(--line)}
+.cat .cathead{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:.95rem}
+.cat.cap .cathead{color:var(--cap)} .cat.exp .cathead{color:var(--exp)}
+ul.entries{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+ul.entries li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;font-size:.9rem;padding:2px 0}
+ul.entries li .nm{min-width:0;overflow-wrap:anywhere}
+ul.entries li .nm em{display:block;font-style:normal;color:var(--muted);font-size:.78rem}
+ul.entries li .acts{display:flex;gap:0}
+.iconbtn{border:none;background:transparent;color:var(--muted);padding:4px 6px;border-radius:4px;font-size:.78rem}
+.iconbtn:hover{background:var(--surface-2);color:var(--fg)}
+.iconbtn.del:hover{color:var(--danger)}
+.none{color:var(--muted);font-size:.85rem}
+.cattot{display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:6px;padding:6px 8px 6px 10px;margin-top:2px}
+.cat.cap .cattot{background:var(--cap-soft)} .cat.exp .cattot{background:var(--exp-soft)}
+.cattot span{font-weight:600;font-size:.85rem}
+.cattot .r{display:flex;align-items:center;gap:8px}
+.cattot b{font-family:var(--mono);font-weight:600}
+.copybtn{border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);border-radius:5px;padding:3px 8px;font-size:.75rem;font-weight:600;min-width:58px}
+.copybtn.done{color:var(--ok);border-color:var(--ok)}
+.card.week{background:var(--surface-2)}
+.card.week .cat{gap:8px}
+.weekrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:6px}
+.weekrow.cap{background:var(--cap-soft)} .weekrow.exp{background:var(--exp-soft)}
+.weekrow.grand{background:var(--accent);color:var(--accent-fg)}
+.weekrow.grand .copybtn{background:transparent;color:var(--accent-fg);border-color:var(--accent-fg)}
+.weekrow span{font-weight:600}
+.weekrow .r{display:flex;align-items:center;gap:8px}
+.weekrow b{font-family:var(--mono);font-size:1.05rem}
+
+/* load confirm + toast */
+.banner{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.banner p{margin:0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--accent-fg);padding:10px 16px;border-radius:8px;font-size:.9rem;font-weight:500;z-index:20;max-width:calc(100% - 32px)}
+.empty-msg{background:var(--surface);border:1px dashed var(--line-strong);border-radius:10px;padding:14px;color:var(--muted);font-size:.9rem}
+@media (prefers-reduced-motion:no-preference){.copybtn,.btn{transition:background .12s,color .12s}}
+
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Capital &amp; Expense Hours</h1>
+      <div class="sub">Log time by project, Monday to Friday. Enter hours and minutes; totals show in decimal hours.</div>
+    </div>
+    <div class="filebar">
+      <span class="status" id="status"><i></i><span id="statusText">Saved in this browser</span></span>
+      <button class="btn" id="saveBtn" type="button">Save to computer</button>
+      <button class="btn" id="loadBtn" type="button">Open saved file</button>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    </div>
+  </div>
+
+  <div class="banner" id="loadBanner" hidden>
+    <p id="loadText"></p>
+    <div class="filebar">
+      <button class="btn primary" id="loadConfirm" type="button">Replace and load</button>
+      <button class="btn" id="loadCancel" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <section class="weekbar" aria-label="Week">
+    <div class="weeknav">
+      <button class="btn sm" id="prevWeek" type="button" aria-label="Previous week">◀</button>
+      <button class="btn sm" id="nextWeek" type="button" aria-label="Next week">▶</button>
+      <button class="btn sm ghost" id="thisWeek" type="button">This week</button>
+    </div>
+    <div class="weektitle" id="weekTitle"></div>
+    <div class="totals">
+      <div class="chip cap"><span class="label">Capital</span><b id="tCap">0.00</b></div>
+      <div class="chip exp"><span class="label">Expense</span><b id="tExp">0.00</b></div>
+      <div class="chip grand"><span class="label">Week total</span><b id="tAll">0.00</b></div>
+    </div>
+  </section>
+
+  <div class="main">
+    <section class="panel" aria-labelledby="entryH">
+      <h2 id="entryH">Log time</h2>
+      <form id="entryForm" novalidate>
+        <div class="field">
+          <span class="label">Day</span>
+          <div class="days" id="dayBtns" role="group" aria-label="Day"></div>
+        </div>
+        <div class="field">
+          <span class="label">Category</span>
+          <div class="seg" role="group" aria-label="Category">
+            <button type="button" data-cat="capital" id="catCapital" aria-pressed="true">Capital</button>
+            <button type="button" data-cat="expense" id="catExpense" aria-pressed="false">Expense</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="project">Project</label>
+          <select id="project"></select>
+        </div>
+        <div class="field">
+          <span class="label" id="timeLbl">Time spent</span>
+          <div class="hm" role="group" aria-labelledby="timeLbl">
+            <div class="unit"><input type="text" id="hours" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="Hours"><span>hr</span></div>
+            <div class="unit"><input type="text" id="minutes" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="Minutes"><span>min</span></div>
+          </div>
+          <span class="hint" id="hmPreview">Enter hours, minutes, or both</span>
+        </div>
+        <div class="field">
+          <label class="label" for="note">Note <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+          <input type="text" id="note" maxlength="120" placeholder="Job number, route, etc." autocomplete="off">
+        </div>
+        <div class="editing-note" id="editingNote" hidden>Editing an entry. Change the fields and select Update entry.</div>
+        <div class="err" id="err" role="alert"></div>
+        <div class="formactions">
+          <button class="btn primary" type="submit" id="submitBtn">Add entry</button>
+          <button class="btn" type="button" id="cancelEdit" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="gridH">
+      <h2 id="gridH">Week at a glance</h2>
+      <div class="tablewrap"><table id="grid"></table></div>
+    </section>
+  </div>
+
+  <section style="display:grid;gap:14px" aria-labelledby="outH">
+    <div class="outhead">
+      <h2 id="outH">Daily output</h2>
+      <p>Each day split by category. Use Copy to grab a category total.</p>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const PROJECTS = {
+  capital: ["Load Asbuilt Task","Relocates"],
+  expense: ["Fiber Splice","Decom","Validate Route"]
+};
+const CAT_LABEL = {capital:"Capital", expense:"Expense"};
+const DAYS = ["Mon","Tue","Wed","Thu","Fri"];
+const DAY_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+const LS_KEY = "capexHours.v1";
+
+let data = {weeks:{}};           // {weeks: {"YYYY-MM-DD": [entry]}}
+let weekStart = mondayOf(new Date());
+let selDay = defaultDay();
+let selCat = "capital";
+let editingId = null;
+let remoteRef = null;
+let saveTimer = null;
+let pendingLoad = null;
+
+const $ = id => document.getElementById(id);
+
+/* ---------- dates & numbers ---------- */
+function mondayOf(d){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); return x; }
+function keyOf(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function fmtShort(d){ return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+function todayIdx(){ const t=new Date(); if(keyOf(mondayOf(t))!==keyOf(weekStart)) return -1; const wd=(t.getDay()+6)%7; return wd<5?wd:-1; }
+function defaultDay(){ const t=todayIdx(); return t>=0?t:0; }
+function roundUp2(n){ return Math.ceil(Math.round(n*1e6)/1e4 - 1e-9)/100; }
+function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
+function parseHours(s){ s=String(s).trim().replace(",", "."); if(!/^\d*\.?\d+$|^\d+\.$/.test(s)) return NaN; return roundUp2(parseFloat(s)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function weekEntries(){ return data.weeks[keyOf(weekStart)] || []; }
+function sum(list){ return Math.round(list.reduce((a,e)=>a+e.hours,0)*100)/100; }
+
+/* ---------- storage ---------- */
+function readLocal(){ try{ const raw=localStorage.getItem(LS_KEY); if(raw){ const p=JSON.parse(raw); if(p&&p.weeks) return p; } }catch(e){} return null; }
+function writeLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){} }
+function setStatus(text, ok){ $("statusText").textContent=text; $("status").classList.toggle("ok", !!ok); }
+
+function persist(){
+  writeLocal();
+  setStatus("Saved in this browser", true);
+}
+
+/* ---------- form ---------- */
+function renderDayBtns(){
+  const t=todayIdx();
+  $("dayBtns").innerHTML=DAYS.map((d,i)=>`<button type="button" id="day${i}" data-day="${i}" aria-pressed="${i===selDay}" title="${DAY_FULL[i]}${i===t?' (today)':''}">${d}<small>${fmtShort(addDays(weekStart,i)).replace(/^\w+ /,"")}</small></button>`).join("");
+}
+function renderProjects(keep){
+  const sel=$("project"); const cur=keep||sel.value;
+  sel.innerHTML=PROJECTS[selCat].map(p=>`<option${p===cur?" selected":""}>${esc(p)}</option>`).join("");
+}
+function setCat(c, keepProj){
+  selCat=c;
+  $("catCapital").setAttribute("aria-pressed", c==="capital");
+  $("catExpense").setAttribute("aria-pressed", c==="expense");
+  renderProjects(keepProj);
+}
+$("dayBtns").addEventListener("click",e=>{ const b=e.target.closest("button[data-day]"); if(!b) return; selDay=+b.dataset.day; renderDayBtns(); });
+document.querySelector(".seg").addEventListener("click",e=>{ const b=e.target.closest("button[data-cat]"); if(b) setCat(b.dataset.cat); });
+function parseWhole(s){ s=String(s).trim(); if(s==="") return 0; return /^\d+$/.test(s)?parseInt(s,10):NaN; }
+function readTime(){ return {h:parseWhole($("hours").value), m:parseWhole($("minutes").value)}; }
+function hmText(h,m){ return [h?h+" hr":"", m?m+" min":""].filter(Boolean).join(" "); }
+function updatePreview(){
+  const {h,m}=readTime(); const p=$("hmPreview");
+  if(isNaN(h)||isNaN(m)||m>59||(h===0&&m===0)){ p.textContent="Enter hours, minutes, or both"; return; }
+  p.textContent=`${hmText(h,m)} = ${fmt(roundUp2(h+m/60))} hrs`;
+}
+$("hours").addEventListener("input",updatePreview);
+$("minutes").addEventListener("input",updatePreview);
+
+$("entryForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const t=readTime();
+  if(isNaN(t.h)){ $("err").textContent="Enter hours as a whole number, like 2"; $("hours").focus(); return; }
+  if(isNaN(t.m)||t.m>59){ $("err").textContent="Enter minutes as a whole number from 0 to 59"; $("minutes").focus(); return; }
+  if(t.h===0&&t.m===0){ $("err").textContent="Enter some time: hours, minutes, or both"; $("hours").focus(); return; }
+  const h=roundUp2(t.h+t.m/60);
+  if(h>24){ $("err").textContent="One entry can't be more than 24 hours"; $("hours").focus(); return; }
+  $("err").textContent="";
+  const wk=keyOf(weekStart);
+  const list=(data.weeks[wk]=data.weeks[wk]||[]);
+  const entry={id:editingId||uid(), day:selDay, cat:selCat, project:$("project").value, hours:h, note:$("note").value.trim()};
+  if(editingId){ const i=list.findIndex(x=>x.id===editingId); if(i>=0) list[i]=entry; else list.push(entry); toast("Entry updated"); }
+  else { list.push(entry); toast(`Added ${hmText(t.h,t.m)} (${fmt(h)} hrs) to ${entry.project}, ${DAYS[selDay]}`); }
+  stopEdit();
+  $("hours").value=""; $("minutes").value=""; $("note").value=""; updatePreview();
+  persist(); render();
+  $("hours").focus();
+});
+function startEdit(id){
+  const e=weekEntries().find(x=>x.id===id); if(!e) return;
+  editingId=id; selDay=e.day; renderDayBtns(); setCat(e.cat, e.project);
+  const tm=Math.round(e.hours*60); $("hours").value=Math.floor(tm/60)||""; $("minutes").value=tm%60||""; updatePreview(); $("note").value=e.note||"";
+  $("submitBtn").textContent="Update entry"; $("cancelEdit").hidden=false; $("editingNote").hidden=false;
+  $("entryForm").scrollIntoView({behavior:"smooth",block:"start"}); $("hours").focus();
+}
+function stopEdit(){ editingId=null; $("submitBtn").textContent="Add entry"; $("cancelEdit").hidden=true; $("editingNote").hidden=true; }
+$("cancelEdit").addEventListener("click",()=>{ stopEdit(); $("hours").value=""; $("minutes").value=""; $("note").value=""; $("err").textContent=""; updatePreview(); });
+
+/* ---------- render ---------- */
+function render(){
+  const ents=weekEntries(); const t=todayIdx();
+  $("weekTitle").textContent=`Week of ${weekStart.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})} – ${fmtShort(addDays(weekStart,4))}`;
+  const capW=sum(ents.filter(e=>e.cat==="capital")), expW=sum(ents.filter(e=>e.cat==="expense"));
+  $("tCap").textContent=fmt(capW); $("tExp").textContent=fmt(expW); $("tAll").textContent=fmt(capW+expW);
+  renderDayBtns();
+
+  // grid
+  const cell=(v,cls="")=>`<td class="v ${cls}${v?"":" zero"}">${fmt(v)}</td>`;
+  let h=`<thead><tr><th>Project</th>${DAYS.map((d,i)=>`<th class="${i===t?"today":""}">${d}<small>${fmtShort(addDays(weekStart,i))}</small></th>`).join("")}<th>Week</th></tr></thead><tbody>`;
+  for(const c of ["capital","expense"]){
+    const k=c==="capital"?"cap":"exp";
+    h+=`<tr class="group ${k}"><td colspan="7">${CAT_LABEL[c]}</td></tr>`;
+    for(const p of PROJECTS[c]){
+      const pe=ents.filter(e=>e.cat===c&&e.project===p);
+      h+=`<tr class="proj"><td>${esc(p)}</td>${DAYS.map((_,i)=>cell(sum(pe.filter(e=>e.day===i)))).join("")}${cell(sum(pe),"wk")}</tr>`;
+    }
+    const ce=ents.filter(e=>e.cat===c);
+    h+=`<tr class="sub ${k}"><td>${CAT_LABEL[c]} total</td>${DAYS.map((_,i)=>`<td class="v">${fmt(sum(ce.filter(e=>e.day===i)))}</td>`).join("")}<td class="v">${fmt(sum(ce))}</td></tr>`;
+  }
+  h+=`<tr class="day"><td>Daily total</td>${DAYS.map((_,i)=>`<td class="v">${fmt(sum(ents.filter(e=>e.day===i)))}</td>`).join("")}<td class="v grand">${fmt(sum(ents))}</td></tr></tbody>`;
+  $("grid").innerHTML=h;
+
+  // cards
+  let out="";
+  if(!ents.length) out+=`<div class="empty-msg" style="grid-column:1/-1">No time logged for this week yet. Pick a day, category and project on the left, enter your hours, and select Add entry. Each day's breakdown appears here.</div>`;
+  DAYS.forEach((d,i)=>{
+    const de=ents.filter(e=>e.day===i);
+    out+=`<article class="card${i===t?" today":""}"><header><h3>${DAY_FULL[i]}<small>${fmtShort(addDays(weekStart,i))}</small></h3><span class="daytot" title="Day total">${fmt(sum(de))}</span></header>`;
+    for(const c of ["capital","expense"]){
+      const k=c==="capital"?"cap":"exp"; const ce=de.filter(e=>e.cat===c); const tot=sum(ce);
+      out+=`<div class="cat ${k}"><div class="cathead">${CAT_LABEL[c]}</div>`;
+      out+= ce.length ? `<ul class="entries">${ce.map(e=>`<li><span class="nm">${esc(e.project)}${e.note?`<em>${esc(e.note)}</em>`:""}</span><span class="num">${fmt(e.hours)}</span><span class="acts"><button class="iconbtn" type="button" data-edit="${e.id}" aria-label="Edit ${esc(e.project)} entry">Edit</button><button class="iconbtn del" type="button" data-del="${e.id}" aria-label="Delete ${esc(e.project)} entry">✕</button></span></li>`).join("")}</ul>`
+        : `<div class="none">No ${CAT_LABEL[c]} time logged</div>`;
+      out+=`<div class="cattot"><span>${CAT_LABEL[c]} total</span><span class="r"><b>${fmt(tot)}</b><button class="copybtn" type="button" data-copy="${fmt(tot)}" aria-label="Copy ${DAY_FULL[i]} ${CAT_LABEL[c]} total">Copy</button></span></div></div>`;
+    }
+    out+=`</article>`;
+  });
+  out+=`<article class="card week"><header><h3>Week total<small>Mon–Fri</small></h3><span class="daytot">${fmt(capW+expW)}</span></header><div class="cat">
+    <div class="weekrow cap"><span>Capital</span><span class="r"><b>${fmt(capW)}</b><button class="copybtn" type="button" data-copy="${fmt(capW)}" aria-label="Copy week Capital total">Copy</button></span></div>
+    <div class="weekrow exp"><span>Expense</span><span class="r"><b>${fmt(expW)}</b><button class="copybtn" type="button" data-copy="${fmt(expW)}" aria-label="Copy week Expense total">Copy</button></span></div>
+    <div class="weekrow grand"><span>Grand total</span><span class="r"><b>${fmt(capW+expW)}</b><button class="copybtn" type="button" data-copy="${fmt(capW+expW)}" aria-label="Copy week grand total">Copy</button></span></div>
+  </div></article>`;
+  $("cards").innerHTML=out;
+}
+
+$("cards").addEventListener("click",async e=>{
+  const c=e.target.closest("[data-copy]");
+  if(c){ await copyText(c.dataset.copy, c); return; }
+  const ed=e.target.closest("[data-edit]"); if(ed){ startEdit(ed.dataset.edit); return; }
+  const d=e.target.closest("[data-del]");
+  if(d){
+    const wk=keyOf(weekStart); const list=data.weeks[wk]||[];
+    const i=list.findIndex(x=>x.id===d.dataset.del); if(i<0) return;
+    const [removed]=list.splice(i,1);
+    if(editingId===removed.id) stopEdit();
+    persist(); render(); toast(`Deleted ${removed.project} (${fmt(removed.hours)})`);
+  }
+});
+
+async function copyText(text, btn){
+  let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }catch(err){
+    try{ const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); ok=document.execCommand("copy"); ta.remove(); }catch(e2){}
+  }
+  if(ok){ btn.textContent="Copied"; btn.classList.add("done"); setTimeout(()=>{btn.textContent="Copy";btn.classList.remove("done");},1400); }
+  else toast(`Couldn't copy automatically. The total is ${text}`);
+}
+
+/* ---------- week nav ---------- */
+function goWeek(d){ weekStart=d; selDay=defaultDay(); stopEdit(); render(); }
+$("prevWeek").addEventListener("click",()=>goWeek(addDays(weekStart,-7)));
+$("nextWeek").addEventListener("click",()=>goWeek(addDays(weekStart,7)));
+$("thisWeek").addEventListener("click",()=>goWeek(mondayOf(new Date())));
+
+/* ---------- save / load file ---------- */
+$("saveBtn").addEventListener("click",()=>{
+  const payload=JSON.stringify({app:"capital-expense-hours",version:1,savedAt:new Date().toISOString(),weeks:data.weeks},null,2);
+  const name=`time-tracker-${keyOf(new Date())}.json`;
+  try{
+    const url=URL.createObjectURL(new Blob([payload],{type:"application/json"}));
+    const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast("Saved "+name);
+  }catch(e){ toast("Couldn't save the file. Try again in a moment."); }
+});
+$("loadBtn").addEventListener("click",()=>$("fileInput").click());
+$("fileInput").addEventListener("change",()=>{
+  const f=$("fileInput").files[0]; $("fileInput").value=""; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const p=JSON.parse(r.result);
+      if(!p||typeof p.weeks!=="object") throw 0;
+      const weeks={};
+      for(const [k,list] of Object.entries(p.weeks)){
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||!Array.isArray(list)) continue;
+        weeks[k]=list.filter(e=>e&&PROJECTS[e.cat]&&PROJECTS[e.cat].includes(e.project)&&e.day>=0&&e.day<=4&&+e.hours>0)
+          .map(e=>({id:String(e.id||uid()),day:+e.day,cat:e.cat,project:e.project,hours:roundUp2(+e.hours),note:String(e.note||"").slice(0,120)}));
+      }
+      const n=Object.keys(weeks).length;
+      if(!n) throw 0;
+      pendingLoad=weeks;
+      $("loadText").textContent=`${f.name} has ${n} week${n>1?"s":""} of entries. Loading replaces any matching weeks here; other weeks stay as they are.`;
+      $("loadBanner").hidden=false;
+    }catch(e){ toast("That file isn't a time tracker save file"); }
+  };
+  r.readAsText(f);
+});
+$("loadConfirm").addEventListener("click",()=>{
+  if(!pendingLoad) return;
+  Object.assign(data.weeks,pendingLoad);
+  const keys=Object.keys(pendingLoad).sort(); pendingLoad=null; $("loadBanner").hidden=true;
+  const cur=keyOf(weekStart);
+  if(!keys.includes(cur)){ const [y,m,d]=keys[keys.length-1].split("-").map(Number); weekStart=new Date(y,m-1,d); selDay=defaultDay(); }
+  persist(); render(); toast("File loaded");
+});
+$("loadCancel").addEventListener("click",()=>{ pendingLoad=null; $("loadBanner").hidden=true; });
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2400); }
+
+/* ---------- boot ---------- */
+const local=readLocal(); if(local) data=local;
+setCat("capital");
+render();
+setStatus("Saved in this browser", true);
+})();
+</script>
+
+</body>
+</html>
